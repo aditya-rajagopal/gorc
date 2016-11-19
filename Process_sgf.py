@@ -2,6 +2,21 @@ import math
 import string
 import numpy as np
 
+def get_stones(board):
+	"""
+	Returns locations of black and white stones in the board
+
+	Input :
+	board : a list of length 361
+
+	Output:
+	black : list of locations of black stones as an np array
+	white : list of lcoations of white stones as an np array
+	"""
+    a = np.array(board)
+    black = np.where(a == 2)[0]
+    white = np.where(a == 1)[0]
+    return black, white
 
 def process_data_folder(path):
 	"""
@@ -43,7 +58,7 @@ def process_board(board, player):
 		elif p_opp in neigh_v:
 			for x in neigh_v_v:
 				if x[1] == p_opp and not(x[0] in group):
-					if x[0] in safe_black:
+					if x[0] in safe:
 						return "safe"
 					group.append(x[0])
 					res = check_alive(x[0])
@@ -125,39 +140,74 @@ def process_ko(dead, x, board, prev_ko):
 def process_file(filename):
 	"""
 	An Iterator that reads an sgf file for the moves and yeilds the the entire board
-	move by move and the state of the board before said move. Future work to also yeild positions where a player may not play and other features.
-	temporary function.
+	move by move and the state of the board before said move.
 
 	Parameters:
 	filename : location to the sgf file as a string
 
 	Yields:
 	prev_board : state of the board before a particular move
-	board : state of the board after playing a move and applying stone elimination rules as a 19x19 np array with white pieces as 1 and black as 2
-				  no pices are represented by 0
-	ko : a whith a 1 where a stone cannot be placed in the next move
+	x : player who played the move
+	y : location of the move
+	prev_ko : a whith a 1 where a stone cannot be placed for this move
 	"""
 	alphabets = string.ascii_lowercase[0:19]
 	alph_num_dict = dict(zip(list(alphabets), range(19))) #create a dictionary mapping the alpabet co-ordinate with numerical one
 	txt = []
 	with open(filename, 'r') as f:	#read sgf file
-		txt = f.readlines()
+		txt = f.read().splitlines()
+
 
 	moves = []
 	for x in txt:
+		if x == '':
+            continue
 		if x[0] == ';':
 			moves.extend(x[1:-1].split(';'))
 
 	def pos(move):
 		return 1 if move[0]=="W" else 2, 19*dict1[move[2]] + dict1[move[3]]
 
+	ko = [0]*361
 	board = [0]*(19*19)
 	for move in moves:
 		x, y = pos(move)		# calculate the position on the board the next piece is placed
 		prev_board = board[:]
+		prev_ko = ko[:]
 		board[y] = x
 		safe, dead = process_board(board) # process board to see if any pieces have lost all liberties
 		for x in dead:
 			board[19*x[0] + x[1]] = 0
 		ko = process_ko(dead, x, board[:], prev_board[:])
-		yield prev_state, board, ko
+		yield prev_board, x, y, prev_ko
+
+def process_data_set(folder, output):
+	"""
+	process files in the list of paths and prints them in the output file in the following format
+	E[move number]
+	B[list of positions for black stones ';'-seperated]
+	W[list of positions for white stones ';'-seperated]
+	P[Player who plays now]
+	M[Location of move]
+	K[locations for ko]
+	
+	Input :
+	folder : location to the sgf files
+	output : file where data is to be written
+
+	Output:
+	file at output
+	"""
+    paths = process_data_folder(folder)
+    with open(output, 'w') as f:
+        for path in paths:
+            for i, (board, player, move, ko) in enumerate(process_file(path)):
+                text = "E[{}]\n".format(i)
+                black, white = get_stones(board[:])
+                text += "B"+"".join(np.array2string(black, max_line_width=181, separator=';').split())+"\n"
+                text += "W"+"".join(np.array2string(white, max_line_width=181, separator=';').split())+"\n"
+                text += "P["+("W]" if player == 1 else "B]")+"\n"
+                text += "M[{}]\n".format(move)
+                _, k = get_stones(ko[:])
+                text += "K"+"".join(np.array2string(k, max_line_width=181, separator=';').split())+"\n"
+                f.write(text)
