@@ -9,14 +9,14 @@ def get_stones(board):
 	Input :
 	board : a list of length 361
 
-	Output:
+	Returns:
 	black : list of locations of black stones as an np array
 	white : list of lcoations of white stones as an np array
 	"""
-    a = np.array(board)
-    black = np.where(a == 2)[0]
-    white = np.where(a == 1)[0]
-    return black, white
+	a = np.array(board)
+	black = np.where(a == 2)[0]
+	white = np.where(a == 1)[0]
+	return black, white
 
 def process_data_folder(path):
 	"""
@@ -25,7 +25,7 @@ def process_data_folder(path):
 	Input:
 	path : relative or absolute path to the folder which is to be searched
 
-	Output:
+	Returns:
 	sgf_files : list of paths to all sgf files
 	"""
 	sgf_files = []
@@ -43,7 +43,7 @@ def process_board(board, player):
 	board : a 361 sized list containing the position of the stones with 1 representing white, 2 black and 0 no stone
 	player : the player who played the last move
 
-	Output:
+	Returns:
 	safe_black : stones that have atleast 1 liberty or are connected to a similar stone with atleast 1 liberty
 	dead_black : stones with no liberties or connected to similar stones with no liberty
 	"""
@@ -118,12 +118,12 @@ def process_ko(dead, x, board, prev_ko):
 
 	Input:
 	dead : list of positions of stones that died on the previous turn
-	x : the identity of the player that just played
+	x : int identity of the player that just played
 	board : the state of the board after player x has played
 	prev_board : state of the baord before player x has played
 
-	Output:
-	ko : a board with a 1 where a stone cannot be placed in the next move
+	Returns:
+	ko : a list of lenght 361 with a 1 where a stone cannot be placed in the next move and 0 elsewhere
 	"""
 	ko = [0]*361
 	if len(dead) == 1:
@@ -142,14 +142,14 @@ def process_file(filename):
 	An Iterator that reads an sgf file for the moves and yeilds the the entire board
 	move by move and the state of the board before said move.
 
-	Parameters:
-	filename : location to the sgf file as a string
+	Input:
+	filename : string location to the sgf file as a string
 
 	Yields:
 	prev_board : state of the board before a particular move
-	x : player who played the move
-	y : location of the move
-	prev_ko : a whith a 1 where a stone cannot be placed for this move
+	x : int player who played the move
+	y : int location of the move
+	prev_ko : a list of len 361 with a 1 where a stone cannot be placed for this move and 0 elsewhere
 	"""
 	alphabets = string.ascii_lowercase[0:19]
 	alph_num_dict = dict(zip(list(alphabets), range(19))) #create a dictionary mapping the alpabet co-ordinate with numerical one
@@ -161,7 +161,7 @@ def process_file(filename):
 	moves = []
 	for x in txt:
 		if x == '':
-            continue
+			continue
 		if x[0] == ';':
 			moves.extend(x[1:-1].split(';'))
 
@@ -192,22 +192,25 @@ def process_data_set(folder, output):
 	K[locations for ko]
 	
 	Input :
-	folder : location to the sgf files
-	output : file where data is to be written
+	folder : string location to the sgf files
+	output : string file where data is to be written
 
-	Output:
+	output:
 	file at output
 	"""
-    paths = process_data_folder(folder)
-    with open(output, 'w') as f:
-        for path in paths:
-            for i, (board, player, move, ko) in enumerate(process_file(path)):
-                text = "E[{}]\n".format(i)
-                black, white = get_stones(board[:])
-                text += "B"+"".join(np.array2string(black, max_line_width=181, separator=';').split())+"\n"
-                text += "W"+"".join(np.array2string(white, max_line_width=181, separator=';').split())+"\n"
-                text += "P["+("W]" if player == 1 else "B]")+"\n"
-                text += "M[{}]\n".format(move)
-                _, k = get_stones(ko[:])
-                text += "K"+"".join(np.array2string(k, max_line_width=181, separator=';').split())+"\n"
-                f.write(text)
+	paths = process_data_folder(folder)
+	with open(output, 'w') as f:
+		for path in paths:
+			for i, (board, player, move, ko) in enumerate(process_file(path)):
+				text = "E[{}]\n".format(i)
+				black, white = get_stones(board[:])
+				text += "B"+"".join(np.array2string(black, max_line_width=181, separator=';').split())+"\n"
+				text += "W"+"".join(np.array2string(white, max_line_width=181, separator=';').split())+"\n"
+				text += "P["+("W]" if player == 1 else "B]")+"\n"
+				text += "M[{}]\n".format(move)
+				_, k = get_stones(ko[:])
+				text += "K"+"".join(np.array2string(k, max_line_width=181, separator=';').split())+"\n"
+				f.write(text)
+
+if __name__ == '__main__':
+	process_data_folder('./data/', './output.adi') #example usage
