@@ -2,6 +2,22 @@ import math
 import string
 import numpy as np
 
+
+def process_data_folder(path):
+	"""
+	Returns the locations of all the sgf files in a folder and all its subfolders
+
+	Input:
+	path : relative or absolute path to the folder which is to be searched
+
+	Output:
+	sgf_files : list of paths to all sgf files
+	"""
+	sgf_files = []
+	for dirpath, _, filenames in os.walk(path):
+		for files in [f for f in filenames if f.endswith('.sgf')]:
+			sgf_files.append(os.path.join(dirpath, files))
+	return sgf_files
 	
 def process_board(board, player):
 	"""
