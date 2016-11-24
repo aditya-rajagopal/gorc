@@ -100,7 +100,7 @@ def process_mini_batch(data):
     for p in data:
         black = p[0] if len(p[0]) != 0 else -1
         white = p[1] if len(p[1]) != 0 else -1
-        board.append(get_board(black, 2) + get_board(white, 1))
+        board.append(get_board(black, -1) + get_board(white, 1))
         target.append(get_target(p[2], p[3]))
         ko.append(get_board(p[4], 1))
     return board, target, ko

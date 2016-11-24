@@ -138,22 +138,25 @@ class GOCNN(object):
             return tf.nn.relu(deconv)
     """
     def cnn_model(self, board, iftrain):
-        conv1_1 = self.conv_2d(board, "conv1_1", [3, 3, 1, 64], [1, 1, 1, 1], "SAME")
-        conv1_2 = self.conv_2d(conv1_1, "conv1_2", [3, 3, 64, 64], [1, 1, 1, 1], "SAME")
-        conv1_3 = self.conv_2d(conv1_1, "conv1_3", [3, 3, 64, 128], [1, 1, 1, 1], "SAME")
+        conv1_1 = self.conv_2d(board, "conv1_1", [7, 7, 1, 64], [1, 1, 1, 1], "SAME")
+        conv1_2 = self.conv_2d(conv1_1, "conv1_2", [5, 5, 64, 64], [1, 1, 1, 1], "SAME")
+        conv1_3 = self.conv_2d(conv1_2, "conv1_3", [5, 5, 64, 128], [1, 1, 1, 1], "SAME")
         pool1 = tf.nn.max_pool(conv1_3, ksize =[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="VALID", name = "pool1")
         
         conv2_1 = self.conv_2d(pool1, "conv2_1", [3, 3, 128, 256], [1, 1, 1, 1], "SAME")
         conv2_2 = self.conv_2d(conv2_1, "conv2_2", [3, 3, 256, 256], [1, 1, 1, 1], "SAME")
-        pool2 = tf.nn.max_pool(conv2_2, ksize =[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="VALID", name = "pool2")
+        conv2_3 = self.conv_2d(conv2_1, "conv2_3", [3, 3, 256, 256], [1, 1, 1, 1], "SAME")
+        pool2 = tf.nn.max_pool(conv2_3, ksize =[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="VALID", name = "pool2")
         
+        """
         conv3_1 = self.conv_2d(pool2, "conv3_1", [3, 3, 256, 512], [1, 1, 1, 1], "SAME")
         conv3_2 = self.conv_2d(conv3_1, "conv3_2", [3, 3, 512, 512], [1, 1, 1, 1], "SAME")
         pool3 = tf.nn.max_pool(conv3_2, ksize =[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME", name = "pool3")
-        
+        """
+
         #shape = pool3.get_shape()
-        h_pool3_flat = tf.reshape(pool3, [-1, 2*2*512])
-        fc1 = self.fc_layer(h_pool3_flat, "fc1", [2*2*512, 1024], iftrain)
+        h_pool3_flat = tf.reshape(pool2, [-1, 4*4*256])
+        fc1 = self.fc_layer(h_pool3_flat, "fc1", [4*4*256, 1024], iftrain)
         fc2 = self.fc_layer(tf.nn.relu(fc1), "fc2", [1024, 1024], iftrain)
         self.fc3 = self.fc_layer(tf.nn.relu(fc2), "fc3", [1024, 361], iftrain = False)
         return self.fc3

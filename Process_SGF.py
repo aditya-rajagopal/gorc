@@ -1,6 +1,7 @@
 import math
 import string
 import numpy as np
+import os
 
 def get_stones(board):
 	"""
@@ -78,41 +79,41 @@ def process_board(board, player):
 	dead = []
 
 	for pi in stones:
-	if not(tuple(pi) in safe) and not(tuple(pi) in dead):
-		group = [tuple(pi)]
-		neighbours = np.clip([pi+[0, 1], pi+[1, 0], pi + [-1, 0], pi + [0, -1]], 0, 18)
+		if not(tuple(pi) in safe) and not(tuple(pi) in dead):
+			group = [tuple(pi)]
+			neighbours = np.clip([pi+[0, 1], pi+[1, 0], pi + [-1, 0], pi + [0, -1]], 0, 18)
 
-		neighbours_v_v = [(tuple(x), a[tuple(x)]) for x in neighbours if tuple(x) != tuple(pi)]
+			neighbours_v_v = [(tuple(x), a[tuple(x)]) for x in neighbours if tuple(x) != tuple(pi)]
 
-		neighbours_v = [x[1] for x in neighbours_v_v]
-		flag = 0
-		if 0 in neighbours_v:
-		    safe.extend(group)
-		elif p_opp in neighbours_v:
-			for x in neighbours_v_v:
-				if x[1] == p_opp and not(x[0] in group) and flag == 0:
-					if x[0] in safe:
-						safe.extend(group)
-						flag = 1
-						break
-					group.append(x[0])
-					res = check_alive(x[0])
-					if res == "safe":
-						safe.extend(group)
-						group = []
-						flag = 1
-						break
-					elif res=="dead":
-						continue
-			if flag != 1:
+			neighbours_v = [x[1] for x in neighbours_v_v]
+			flag = 0
+			if 0 in neighbours_v:
+			    safe.extend(group)
+			elif p_opp in neighbours_v:
+				for x in neighbours_v_v:
+					if x[1] == p_opp and not(x[0] in group) and flag == 0:
+						if x[0] in safe:
+							safe.extend(group)
+							flag = 1
+							break
+						group.append(x[0])
+						res = check_alive(x[0])
+						if res == "safe":
+							safe.extend(group)
+							group = []
+							flag = 1
+							break
+						elif res=="dead":
+							continue
+				if flag != 1:
+					dead.extend(group)
+					group = []
+			else:
 				dead.extend(group)
 				group = []
-		else:
-			dead.extend(group)
-			group = []
 	return safe, dead
 
-def process_ko(dead, x, board, prev_ko):
+def process_ko(dead, x, board, prev_board):
 	"""
 	Processes the board to identify a ko
 
@@ -166,16 +167,17 @@ def process_file(filename):
 			moves.extend(x[1:-1].split(';'))
 
 	def pos(move):
-		return 1 if move[0]=="W" else 2, 19*dict1[move[2]] + dict1[move[3]]
+		return 1 if move[0]=="W" else 2, 19*alph_num_dict[move[2]] + alph_num_dict[move[3]]
 
 	ko = [0]*361
 	board = [0]*(19*19)
+	prev_board = board
 	for move in moves:
 		x, y = pos(move)		# calculate the position on the board the next piece is placed
 		prev_board = board[:]
 		prev_ko = ko[:]
 		board[y] = x
-		safe, dead = process_board(board) # process board to see if any pieces have lost all liberties
+		safe, dead = process_board(board, x) # process board to see if any pieces have lost all liberties
 		for x in dead:
 			board[19*x[0] + x[1]] = 0
 		ko = process_ko(dead, x, board[:], prev_board[:])
@@ -201,6 +203,7 @@ def process_data_set(folder, output):
 	paths = process_data_folder(folder)
 	with open(output, 'w') as f:
 		for path in paths:
+			print "Processing file {}".format(path),
 			for i, (board, player, move, ko) in enumerate(process_file(path)):
 				text = "E[{}]\n".format(i)
 				black, white = get_stones(board[:])
@@ -211,6 +214,7 @@ def process_data_set(folder, output):
 				_, k = get_stones(ko[:])
 				text += "K"+"".join(np.array2string(k, max_line_width=181, separator=';').split())+"\n"
 				f.write(text)
+			print "DONE"
 
 if __name__ == '__main__':
-	process_data_folder('./data/', './output.adi') #example usage
+	process_data_set('./data/badukmovies-pro-collection/', './output.adi') #example usage
