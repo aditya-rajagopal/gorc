@@ -62,23 +62,24 @@ def get_board(pos, num):
     board : np.array() type int32 with pos filled with num
     """
     board = np.zeros((361), np.int32)
+    if pos == -1:
+        return board.reshape(19, 19, 1)
     for p in pos:
         board[p] = num
-    return board.reshape(19, 19)
+    return board.reshape(19, 19, 1)
 
 def get_target(pl, pos):
     """
     Generate target matrix given player and position of move
 
     Input:
-    pl : player playing as int
     pos : postion of move as int
 
     Returns:
-    tar : (2, 361) np.array() of type int32 with 1 at pl, pos 
+    tar : (361) np.array() of type int32 with 1 at pos 
     """
-    tar = np.zeros((2 , 361), dtype = np.int32)
-    tar[(pl-1), pos] = 1
+    tar = np.zeros(361, dtype = np.int32)
+    tar[pos] = 1
     return tar
 
 def process_mini_batch(data):
@@ -97,8 +98,9 @@ def process_mini_batch(data):
     target = []
     ko = []
     for p in data:
-        print "P", p
-        board.append(get_board(p[0], 2) + get_board(p[1], 1))
+        black = p[0] if len(p[0]) != 0 else -1
+        white = p[1] if len(p[1]) != 0 else -1
+        board.append(get_board(black, 2) + get_board(white, 1))
         target.append(get_target(p[2], p[3]))
         ko.append(get_board(p[4], 1))
     return board, target, ko
@@ -122,9 +124,9 @@ def batch_iter(data, batch_size):
     rem = num_data%batch_size
     for step in range(num_steps):
         if step == (num_steps-1) and rem !=0:
-            data_batch = data[(step+1)*batch_size:]
+            data_batch = data[(step)*batch_size:]
             random.shuffle(data)
-            data_batch.append(data[:(batch_size - rem)])
+            data_batch.extend(data[:(batch_size - rem)])
             board, target, ko = process_mini_batch(data_batch)
             yield (board, target, ko)
         else:
