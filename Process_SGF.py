@@ -2,6 +2,7 @@ import math
 import string
 import numpy as np
 import os
+import random
 
 def get_stones(board):
 	"""
@@ -183,7 +184,21 @@ def process_file(filename):
 		ko = process_ko(dead, x, board[:], prev_board[:])
 		yield prev_board, x, y, prev_ko
 
-def process_data_set(folder, output):
+def process_path(path, f):
+	print "Processing file {}".format(path),
+	for i, (board, player, move, ko) in enumerate(process_file(path)):
+		text = "E[{}]\n".format(i)
+		black, white = get_stones(board[:])
+		text += "B"+"".join(np.array2string(black, max_line_width=181, separator=';').split())+"\n"
+		text += "W"+"".join(np.array2string(white, max_line_width=181, separator=';').split())+"\n"
+		text += "P["+("W]" if player == 1 else "B]")+"\n"
+		text += "M[{}]\n".format(move)
+		_, k = get_stones(ko[:])
+		text += "K"+"".join(np.array2string(k, max_line_width=181, separator=';').split())+"\n"
+		f.write(text)
+	print "DONE"
+
+def process_data_set(folder, output, num_files = -1):
 	"""
 	process files in the list of paths and prints them in the output file in the following format
 	E[move number]
@@ -201,20 +216,17 @@ def process_data_set(folder, output):
 	file at output
 	"""
 	paths = process_data_folder(folder)
+	if num_files == -1:
+		num_files = len(paths)
+	if num_files < len(paths):
+		paths = paths[0:num_files]
 	with open(output, 'w') as f:
 		for path in paths:
-			print "Processing file {}".format(path),
-			for i, (board, player, move, ko) in enumerate(process_file(path)):
-				text = "E[{}]\n".format(i)
-				black, white = get_stones(board[:])
-				text += "B"+"".join(np.array2string(black, max_line_width=181, separator=';').split())+"\n"
-				text += "W"+"".join(np.array2string(white, max_line_width=181, separator=';').split())+"\n"
-				text += "P["+("W]" if player == 1 else "B]")+"\n"
-				text += "M[{}]\n".format(move)
-				_, k = get_stones(ko[:])
-				text += "K"+"".join(np.array2string(k, max_line_width=181, separator=';').split())+"\n"
-				f.write(text)
-			print "DONE"
+			process_path(path, f)
 
 if __name__ == '__main__':
-	process_data_set('./data/badukmovies-pro-collection/', './output.adi') #example usage
+	data_folder = './data/badukmovies-pro-collection/'
+	output_file = './output.adi'
+	print "Processing SGF files in {}".format(data_folder)
+	process_data_set(data_folder, output_file, 100)
+	print "Folder Processed, data written in {}".format(output_file)

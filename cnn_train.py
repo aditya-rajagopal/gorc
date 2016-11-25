@@ -140,13 +140,15 @@ class GOCNN(object):
     def cnn_model(self, board, iftrain):
         conv1_1 = self.conv_2d(board, "conv1_1", [7, 7, 1, 64], [1, 1, 1, 1], "SAME")
         conv1_2 = self.conv_2d(conv1_1, "conv1_2", [5, 5, 64, 64], [1, 1, 1, 1], "SAME")
-        conv1_3 = self.conv_2d(conv1_2, "conv1_3", [5, 5, 64, 128], [1, 1, 1, 1], "SAME")
-        pool1 = tf.nn.max_pool(conv1_3, ksize =[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="VALID", name = "pool1")
+        conv1_3 = self.conv_2d(conv1_2, "conv1_3", [5, 5, 64, 64], [1, 1, 1, 1], "SAME")
+        #pool1 = tf.nn.max_pool(conv1_3, ksize =[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="VALID", name = "pool1")
+
+        conv1_4 = self.conv_2d(conv1_3, "conv1_4", [5, 5, 64, 64], [1, 1, 1, 1], "SAME")
         
-        conv2_1 = self.conv_2d(pool1, "conv2_1", [3, 3, 128, 256], [1, 1, 1, 1], "SAME")
-        conv2_2 = self.conv_2d(conv2_1, "conv2_2", [3, 3, 256, 256], [1, 1, 1, 1], "SAME")
-        conv2_3 = self.conv_2d(conv2_1, "conv2_3", [3, 3, 256, 256], [1, 1, 1, 1], "SAME")
-        pool2 = tf.nn.max_pool(conv2_3, ksize =[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="VALID", name = "pool2")
+        conv2_1 = self.conv_2d(conv1_4, "conv2_1", [3, 3, 64, 128], [1, 1, 1, 1], "SAME")
+        conv2_2 = self.conv_2d(conv2_1, "conv2_2", [3, 3, 128, 128], [1, 1, 1, 1], "SAME")
+        conv2_3 = self.conv_2d(conv2_1, "conv2_3", [3, 3, 128, 128], [1, 1, 1, 1], "SAME")
+        #pool2 = tf.nn.max_pool(conv2_3, ksize =[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="VALID", name = "pool2")
         
         """
         conv3_1 = self.conv_2d(pool2, "conv3_1", [3, 3, 256, 512], [1, 1, 1, 1], "SAME")
@@ -155,17 +157,17 @@ class GOCNN(object):
         """
 
         #shape = pool3.get_shape()
-        h_pool3_flat = tf.reshape(pool2, [-1, 4*4*256])
-        fc1 = self.fc_layer(h_pool3_flat, "fc1", [4*4*256, 1024], iftrain)
+        h_pool3_flat = tf.reshape(conv2_3, [-1, 19*19*128])
+        fc1 = self.fc_layer(h_pool3_flat, "fc1", [19*19*128, 1024], iftrain)
         fc2 = self.fc_layer(tf.nn.relu(fc1), "fc2", [1024, 1024], iftrain)
         self.fc3 = self.fc_layer(tf.nn.relu(fc2), "fc3", [1024, 361], iftrain = False)
         return self.fc3
 
 if __name__== '__main__':
     sess = tf.Session()
-    batch_size = 20
+    batch_size = 100
     num_epoch = 200
-    train_data, test_data = p.load_data('example/dataset.adi')
+    train_data, test_data = p.load_data('output.adi')
     board = tf.placeholder(tf.float32, [batch_size, 19, 19, 1])
     target = tf.placeholder(tf.float32, [batch_size, 19*19])
     board_test = tf.placeholder(tf.float32, [1, 19, 19, 1])
@@ -199,7 +201,7 @@ if __name__== '__main__':
             if step%100 ==0:
                 gocnn.writer.add_summary(summary, i*10000/batch_size + step)
             accuracy+=acc
-            if step%int(math.ceil(len(train_data)/batch_size/100.0))==0:
+            if step%int(math.ceil(len(train_data)/batch_size/10.0))==0:
                 print "step:{}\taccuracy:{:3.3f}\tloss:{:3.5f}\t".format(step,accuracy/(step+1), loss)
 
         accuracy = 0
@@ -209,7 +211,6 @@ if __name__== '__main__':
                 acc = sess.run(gocnn_test.accuracy, 
                     feed_dict = {gocnn_test.board:x, gocnn_test.target:y})
                 accuracy+=acc
-                if step%int(math.ceil(len(train_data)/batch_size/100.0))==0:
-                    print "step:{}\taccuracy:{:3.3f}".format(step, accuracy/(step+1))
+            print "step:{}\taccuracy:{:3.3f}".format(step, accuracy/(step+1))
             path = saver.save(sess, checkpoint_prefix, global_step=i)
             print("Saved model checkpoint to {}\n".format(path))
