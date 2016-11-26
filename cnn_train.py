@@ -49,10 +49,12 @@ class GOCNN(object):
             global_step_gd = tf.Variable(0, name = "global_step_gd", trainable = False)
             self.learning_rate_ad = tf.train.exponential_decay(0.0001, global_step_ad, 4000, 0.95, staircase = True)
             self.learning_rate_gd = tf.train.exponential_decay(0.001, global_step_gd, 4000, 0.95, staircase = True)
+            _variable_summaries(self.learning_rate_gd)
             self.train_step_gd = tf.train.GradientDescentOptimizer(self.learning_rate_gd).minimize(self.loss, global_step = global_step_gd)
             self.train_step_ad	= tf.train.AdamOptimizer(self.learning_rate_ad).minimize(self.loss, global_step = global_step_ad)
             self.correct_prediction = tf.equal(tf.argmax(tf.nn.softmax(self.fc3),1), tf.argmax(self.target,1))
             self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, tf.float32))
+            _variable_summaries(self.accuracy)
             self.merged = tf.merge_all_summaries()
             self.writer = tf.train.SummaryWriter("./summaries/logs/train", sess.graph)
         else:
@@ -138,16 +140,18 @@ class GOCNN(object):
             return tf.nn.relu(deconv)
     """
     def cnn_model(self, board, iftrain):
-        conv1_1 = self.conv_2d(board, "conv1_1", [7, 7, 1, 64], [1, 1, 1, 1], "SAME")
+        conv1_1 = self.conv_2d(board, "conv1_1", [7, 7, 3, 64], [1, 1, 1, 1], "SAME")
         conv1_2 = self.conv_2d(conv1_1, "conv1_2", [5, 5, 64, 64], [1, 1, 1, 1], "SAME")
         conv1_3 = self.conv_2d(conv1_2, "conv1_3", [5, 5, 64, 64], [1, 1, 1, 1], "SAME")
+        conv1_4 = self.conv_2d(conv1_3, "conv1_4", [3, 3, 64, 64], [1, 1, 1, 1], "SAME")
+        conv1_5 = self.conv_2d(conv1_4, "conv1_5", [3, 3, 64, 64], [1, 1, 1, 1], "SAME")
         #pool1 = tf.nn.max_pool(conv1_3, ksize =[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="VALID", name = "pool1")
 
-        conv1_4 = self.conv_2d(conv1_3, "conv1_4", [5, 5, 64, 64], [1, 1, 1, 1], "SAME")
+        conv1_6 = self.conv_2d(conv1_5, "conv1_6", [3, 3, 64, 128], [1, 1, 1, 1], "SAME")
         
-        conv2_1 = self.conv_2d(conv1_4, "conv2_1", [3, 3, 64, 128], [1, 1, 1, 1], "SAME")
-        conv2_2 = self.conv_2d(conv2_1, "conv2_2", [3, 3, 128, 128], [1, 1, 1, 1], "SAME")
-        conv2_3 = self.conv_2d(conv2_1, "conv2_3", [3, 3, 128, 128], [1, 1, 1, 1], "SAME")
+        conv2_1 = self.conv_2d(conv1_6, "conv2_1", [3, 3, 128, 128], [1, 1, 1, 1], "SAME")
+        conv2_2 = self.conv_2d(conv2_1, "conv2_2", [3, 3, 128, 192], [1, 1, 1, 1], "SAME")
+        conv2_3 = self.conv_2d(conv2_2, "conv2_3", [3, 3, 192, 192], [1, 1, 1, 1], "SAME")
         #pool2 = tf.nn.max_pool(conv2_3, ksize =[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="VALID", name = "pool2")
         
         """
@@ -157,10 +161,10 @@ class GOCNN(object):
         """
 
         #shape = pool3.get_shape()
-        h_pool3_flat = tf.reshape(conv2_3, [-1, 19*19*128])
-        fc1 = self.fc_layer(h_pool3_flat, "fc1", [19*19*128, 1024], iftrain)
-        fc2 = self.fc_layer(tf.nn.relu(fc1), "fc2", [1024, 1024], iftrain)
-        self.fc3 = self.fc_layer(tf.nn.relu(fc2), "fc3", [1024, 361], iftrain = False)
+        h_pool3_flat = tf.reshape(conv2_3, [-1, 19*19*192])
+        fc1 = self.fc_layer(h_pool3_flat, "fc1", [19*19*192, 1024], iftrain)
+        #fc2 = self.fc_layer(tf.nn.relu(fc1), "fc2", [1024, 1024], iftrain)
+        self.fc3 = self.fc_layer(tf.nn.relu(fc1), "fc3", [1024, 361], iftrain = False)
         return self.fc3
 
 if __name__== '__main__':
@@ -168,9 +172,9 @@ if __name__== '__main__':
     batch_size = 100
     num_epoch = 200
     train_data, test_data = p.load_data('output.adi')
-    board = tf.placeholder(tf.float32, [batch_size, 19, 19, 1])
+    board = tf.placeholder(tf.float32, [batch_size, 19, 19, 3])
     target = tf.placeholder(tf.float32, [batch_size, 19*19])
-    board_test = tf.placeholder(tf.float32, [1, 19, 19, 1])
+    board_test = tf.placeholder(tf.float32, [1, 19, 19, 3])
     target_test = tf.placeholder(tf.float32, [1, 19*19])
     with tf.variable_scope("model"):
         gocnn = GOCNN(board, target, sess = sess)
@@ -192,7 +196,7 @@ if __name__== '__main__':
         start = time.time()
         accuracy = 0
         for step, (x, y, z) in enumerate(p.batch_iter(train_data, batch_size)):
-            if i < 30:
+            if i > 30:
                 _, loss, lr, acc, summary = sess.run([gocnn.train_step_ad, gocnn.loss, gocnn.learning_rate_ad, gocnn.accuracy,gocnn.merged ], 
                                                      feed_dict = {gocnn.board:x, gocnn.target:y})
             else:
