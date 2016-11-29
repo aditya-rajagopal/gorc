@@ -209,12 +209,14 @@ if __name__== '__main__':
                 print "step:{}\taccuracy:{:3.3f}\tloss:{:3.5f}\t".format(step,accuracy/(step+1), loss)
 
         accuracy = 0
-        if (i+1)%10==0 or i==0:
-            print "Validation : --------------------------------------------"
-            for step, (x, y, z) in enumerate(p.batch_iter(test_data, 1)):
-                acc = sess.run(gocnn_test.accuracy, 
-                    feed_dict = {gocnn_test.board:x, gocnn_test.target:y})
-                accuracy+=acc
-            print "step:{}\taccuracy:{:3.3f}".format(step, accuracy/(step+1))
+        #if (i+1)%2==0 or i==0:
+        print "Validation : --------------------------------------------"
+        for step, (x, y, z) in enumerate(p.batch_iter(test_data, 1)):
+            acc = sess.run(gocnn_test.accuracy, 
+                feed_dict = {gocnn_test.board:x, gocnn_test.target:y})
+            accuracy+=acc
+        print "step:{}\taccuracy:{:3.3f}".format(step, accuracy/(step+1))
+        f.write("V:{:0.5f}\n".format(accuracy/(step+1)))
+        if (i+1)%10 == 0:
             path = saver.save(sess, checkpoint_prefix, global_step=i)
             print("Saved model checkpoint to {}\n".format(path))
