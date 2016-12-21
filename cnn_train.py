@@ -47,11 +47,14 @@ class GOCNN(object):
             self.loss += tf.add_n(tf.get_collection("losses"), name = "total_loss")
             global_step_ad = tf.Variable(0, name = "global_step_ad", trainable = False)
             global_step_gd = tf.Variable(0, name = "global_step_gd", trainable = False)
+            global_step_rms = tf.Variable(0, name = "global_step_rms", trainable = False)
             self.learning_rate_ad = tf.train.exponential_decay(0.001, global_step_ad, 10000, 0.95, staircase = True)
             self.learning_rate_gd = tf.train.exponential_decay(0.01, global_step_gd, 10000, 0.95, staircase = True)
+            self.learning_rate_rms = tf.train.exponential_decay(0.001, global_step_rms, 10000, 0.95, staircase = True)
             _variable_summaries(self.learning_rate_gd)
             self.train_step_gd = tf.train.GradientDescentOptimizer(self.learning_rate_gd).minimize(self.loss, global_step = global_step_gd)
             self.train_step_ad	= tf.train.AdamOptimizer(self.learning_rate_ad).minimize(self.loss, global_step = global_step_ad)
+            self.train_step_rms = tf.train.RMSPropOptimizer(self.learning_rate_rms, momentum = 0.5).minimize(self.loss, global_step = global_step_rms)
             self.correct_prediction = tf.equal(tf.argmax(tf.nn.softmax(self.fc3),1), tf.argmax(self.target,1))
             self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, tf.float32), name = "accuracy")
             _variable_summaries(self.accuracy)
@@ -189,10 +192,10 @@ class GOCNN(object):
     def cnn_modelBN(self, board, iftrain):
         conv1_1 = self.conv_2dBN(board, "conv1_1", [7, 7, 3, 64], [1, 1, 1, 1], "SAME", iftrain)
         conv1_2 = self.conv_2dBN(conv1_1, "conv1_2", [5, 5, 64, 64], [1, 1, 1, 1], "SAME", iftrain)
-        #conv1_3 = self.conv_2dBN(conv1_2, "conv1_3", [5, 5, 64, 64], [1, 1, 1, 1], "SAME", iftrain)
+        conv1_3 = self.conv_2dBN(conv1_2, "conv1_3", [5, 5, 64, 64], [1, 1, 1, 1], "SAME", iftrain)
         #conv1_4 = self.conv_2dBN(conv1_3, "conv1_4", [3, 3, 64, 64], [1, 1, 1, 1], "SAME", iftrain)
         #conv1_5 = self.conv_2dBN(conv1_4, "conv1_5", [3, 3, 64, 64], [1, 1, 1, 1], "SAME", iftrain)
-        conv1_6 = self.conv_2dBN(conv1_2, "conv1_6", [3, 3, 64, 128], [1, 1, 1, 1], "SAME", iftrain)        
+        conv1_6 = self.conv_2dBN(conv1_3, "conv1_6", [3, 3, 64, 128], [1, 1, 1, 1], "SAME", iftrain)        
         conv2_1 = self.conv_2dBN(conv1_6, "conv2_1", [3, 3, 128, 128], [1, 1, 1, 1], "SAME", iftrain)
         conv2_2 = self.conv_2dBN(conv2_1, "conv2_2", [3, 3, 128, 192], [1, 1, 1, 1], "SAME", iftrain)
         conv2_3 = self.conv_2dBN(conv2_2, "conv2_3", [3, 3, 192, 192], [1, 1, 1, 1], "SAME", iftrain)
@@ -231,12 +234,12 @@ if __name__== '__main__':
         start = time.time()
         accuracy = 0
         for step, (x, y, z) in enumerate(p.batch_iter(train_data, batch_size)):
-            if i < 10:
-                _, loss, lr, acc = sess.run([gocnn.train_step_ad, gocnn.loss, gocnn.learning_rate_ad, gocnn.accuracy], 
+            #if i < 10:
+            _, loss, lr, acc = sess.run([gocnn.train_step_rms, gocnn.loss, gocnn.learning_rate_rms, gocnn.accuracy], 
                                                      feed_dict = {gocnn.board:x, gocnn.target:y})
-            else:
-                _, loss, lr, acc = sess.run([gocnn.train_step_gd, gocnn.loss, gocnn.learning_rate_gd, gocnn.accuracy], 
-                                                     feed_dict = {gocnn.board:x, gocnn.target:y})
+            #else:
+               # _, loss, lr, acc = sess.run([gocnn.train_step_gd, gocnn.loss, gocnn.learning_rate_gd, gocnn.accuracy], 
+               #                                     feed_dict = {gocnn.board:x, gocnn.target:y})
             accuracy+=acc
             if step%10==0:
                 print "step:{}\taccuracy:{:3.3f}\tloss:{:3.5f}\t".format(step,accuracy/(step+1), loss)
