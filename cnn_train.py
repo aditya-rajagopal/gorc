@@ -68,15 +68,15 @@ class GOCNN(object):
             tf.add_to_collection(collection_name, weight_decay)
         return var
     
-    def batch_norm_wrapper(self, name, bottom, iftrain = True, decay = 0.99999):
+    def batch_norm_wrapper(self, name, bottom, iftrain = True, decay = 0.9):
         with tf.variable_scope(name):
             scale = tf.get_variable("scale", shape = [bottom.get_shape()[-1]], dtype = tf.float32, initializer = tf.constant_initializer(1.0))
             beta = tf.get_variable("beta", shape = [bottom.get_shape()[-1]], dtype = tf.float32, initializer = tf.constant_initializer(0.0))
-            pop_mean = tf.get_variable("pop_mean", shape = [int(x) for x in bottom.get_shape()[1:]], dtype = tf.float32, initializer = tf.constant_initializer(0.0), trainable = False)
-            pop_var = tf.get_variable("pop_var", shape = [int(x) for x in bottom.get_shape()[1:]], dtype = tf.float32, initializer = tf.constant_initializer(1.0), trainable = False)
+            pop_mean = tf.get_variable("pop_mean", shape = [bottom.get_shape()[-1]], dtype = tf.float32, initializer = tf.constant_initializer(0.0), trainable = False)
+            pop_var = tf.get_variable("pop_var", shape = [bottom.get_shape()[-1]], dtype = tf.float32, initializer = tf.constant_initializer(1.0), trainable = False)
 
             if iftrain:
-                batch_mean, batch_var = tf.nn.moments(bottom, [0])
+                batch_mean, batch_var = tf.nn.moments(bottom, [0, 1, 2])
                 train_mean = tf.assign(pop_mean, pop_mean*decay + batch_mean*(1 - decay))
                 train_var = tf.assign(pop_var, pop_var*decay + batch_var*(1 - decay))
 
@@ -189,17 +189,17 @@ class GOCNN(object):
     def cnn_modelBN(self, board, iftrain):
         conv1_1 = self.conv_2dBN(board, "conv1_1", [7, 7, 3, 64], [1, 1, 1, 1], "SAME", iftrain)
         conv1_2 = self.conv_2dBN(conv1_1, "conv1_2", [5, 5, 64, 64], [1, 1, 1, 1], "SAME", iftrain)
-        conv1_3 = self.conv_2dBN(conv1_2, "conv1_3", [5, 5, 64, 64], [1, 1, 1, 1], "SAME", iftrain)
-        conv1_4 = self.conv_2dBN(conv1_3, "conv1_4", [3, 3, 64, 64], [1, 1, 1, 1], "SAME", iftrain)
-        conv1_5 = self.conv_2dBN(conv1_4, "conv1_5", [3, 3, 64, 64], [1, 1, 1, 1], "SAME", iftrain)
-        conv1_6 = self.conv_2dBN(conv1_3, "conv1_6", [5, 5, 64, 128], [1, 1, 1, 1], "SAME", iftrain)        
+        #conv1_3 = self.conv_2dBN(conv1_2, "conv1_3", [5, 5, 64, 64], [1, 1, 1, 1], "SAME", iftrain)
+        #conv1_4 = self.conv_2dBN(conv1_3, "conv1_4", [3, 3, 64, 64], [1, 1, 1, 1], "SAME", iftrain)
+        #conv1_5 = self.conv_2dBN(conv1_4, "conv1_5", [3, 3, 64, 64], [1, 1, 1, 1], "SAME", iftrain)
+        conv1_6 = self.conv_2dBN(conv1_2, "conv1_6", [3, 3, 64, 128], [1, 1, 1, 1], "SAME", iftrain)        
         conv2_1 = self.conv_2dBN(conv1_6, "conv2_1", [3, 3, 128, 128], [1, 1, 1, 1], "SAME", iftrain)
         conv2_2 = self.conv_2dBN(conv2_1, "conv2_2", [3, 3, 128, 192], [1, 1, 1, 1], "SAME", iftrain)
         conv2_3 = self.conv_2dBN(conv2_2, "conv2_3", [3, 3, 192, 192], [1, 1, 1, 1], "SAME", iftrain)
         h_pool3_flat = tf.reshape(conv2_3, [-1, 19*19*192])
-        fc1 = self.fc_layer(h_pool3_flat, "fc1", [19*19*192, 1024], iftrain)
-        fc2 = self.fc_layer(tf.nn.relu(fc1), "fc2", [1024, 1024], iftrain)
-        self.fc3 = self.fc_layer(tf.nn.relu(fc2), "fc3", [1024, 361], iftrain = False)
+        #fc1 = self.fc_layer(h_pool3_flat, "fc1", [19*19*192, 1024], iftrain)
+        #fc2 = self.fc_layer(tf.nn.relu(fc1), "fc2", [1024, 1024], iftrain)
+        self.fc3 = self.fc_layer(h_pool3_flat, "fc3", [19*19*192, 361], iftrain = False)
         return self.fc3
 
 if __name__== '__main__':
