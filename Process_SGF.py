@@ -174,7 +174,7 @@ def process_file(filename):
 	board = [0]*(19*19)
 	prev_board = board
 	for move in moves:
-		if move[2:4] == 'tt' or move[1:] == '[]':
+		if move[2:4] == 'tt' or move[1:] == '[]' or move == '':
 			continue
 		x, y = pos(move)		# calculate the position on the board the next piece is placed
 		prev_board = board[:]
