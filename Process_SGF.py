@@ -174,6 +174,8 @@ def process_file(filename):
 	board = [0]*(19*19)
 	prev_board = board
 	for move in moves:
+		if move[2:4] == 'tt' or move[1:] == '[]' or move == '':
+			continue
 		x, y = pos(move)		# calculate the position on the board the next piece is placed
 		prev_board = board[:]
 		prev_ko = ko[:]
@@ -186,7 +188,9 @@ def process_file(filename):
 
 def process_path(path, f):
 	print "Processing file {}".format(path),
+	t = 0
 	for i, (board, player, move, ko) in enumerate(process_file(path)):
+		t += 1
 		text = "E[{}]\n".format(i)
 		black, white = get_stones(board[:])
 		text += "B"+"".join(np.array2string(black, max_line_width=181, separator=';').split())+"\n"
@@ -197,6 +201,7 @@ def process_path(path, f):
 		text += "K"+"".join(np.array2string(k, max_line_width=181, separator=';').split())+"\n"
 		f.write(text)
 	print "DONE"
+	return t
 
 def process_data_set(folder, output, num_files = -1):
 	"""
@@ -216,17 +221,21 @@ def process_data_set(folder, output, num_files = -1):
 	file at output
 	"""
 	paths = process_data_folder(folder)
+	random.shuffle(paths)
 	if num_files == -1:
 		num_files = len(paths)
 	if num_files < len(paths):
 		paths = paths[0:num_files]
+	total_examples = 0
 	with open(output, 'w') as f:
 		for path in paths:
-			process_path(path, f)
+			total_examples += process_path(path, f)
+	print "Total Examples : ", total_examples
+	
 
 if __name__ == '__main__':
-	data_folder = './data/badukmovies-pro-collection/'
+	data_folder = './games/'
 	output_file = './output.adi'
 	print "Processing SGF files in {}".format(data_folder)
-	process_data_set(data_folder, output_file, 100)
+	process_data_set(data_folder, output_file, 1000)
 	print "Folder Processed, data written in {}".format(output_file)

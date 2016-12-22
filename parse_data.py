@@ -90,7 +90,7 @@ def process_mini_batch(data):
     data : list of data points in the mini batch
 
     Returns:
-    board : list of (19,19) np.array() representing the state of the GO board for every point in data
+    board : list of (19,19,3) np.array() representing the state of the GO board for every point in data
     target : the target move corresponding to the each board state
     ko : ko restrictions for each board state 
     """
@@ -100,7 +100,8 @@ def process_mini_batch(data):
     for p in data:
         black = p[0] if len(p[0]) != 0 else -1
         white = p[1] if len(p[1]) != 0 else -1
-        board.append(get_board(black, -1) + get_board(white, 1))
+        mat1, mat2 = (black, white) if p[2] == 1 else (white, black)
+        board.append(np.dstack((get_board(mat1, 1), get_board(mat2, 1), get_board(p[4], 1))))
         target.append(get_target(p[2], p[3]))
         ko.append(get_board(p[4], 1))
     return board, target, ko
