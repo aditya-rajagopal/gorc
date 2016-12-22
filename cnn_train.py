@@ -43,22 +43,25 @@ class GOCNN(object):
         self.wd = 1e-4
         
         if iftrain:
-            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(self.cnn_model(self.board, iftrain), self.target), name = 'xentropy_mean')
+            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(self.cnn_modelBN(self.board, iftrain), self.target), name = 'xentropy_mean')
             self.loss += tf.add_n(tf.get_collection("losses"), name = "total_loss")
             global_step_ad = tf.Variable(0, name = "global_step_ad", trainable = False)
             global_step_gd = tf.Variable(0, name = "global_step_gd", trainable = False)
-            self.learning_rate_ad = tf.train.exponential_decay(0.0001, global_step_ad, 4000, 0.95, staircase = True)
-            self.learning_rate_gd = tf.train.exponential_decay(0.001, global_step_gd, 4000, 0.95, staircase = True)
+            global_step_rms = tf.Variable(0, name = "global_step_rms", trainable = False)
+            self.learning_rate_ad = tf.train.exponential_decay(0.001, global_step_ad, 10000, 0.95, staircase = True)
+            self.learning_rate_gd = tf.train.exponential_decay(0.01, global_step_gd, 10000, 0.95, staircase = True)
+            self.learning_rate_rms = tf.train.exponential_decay(0.001, global_step_rms, 10000, 0.95, staircase = True)
             _variable_summaries(self.learning_rate_gd)
             self.train_step_gd = tf.train.GradientDescentOptimizer(self.learning_rate_gd).minimize(self.loss, global_step = global_step_gd)
             self.train_step_ad	= tf.train.AdamOptimizer(self.learning_rate_ad).minimize(self.loss, global_step = global_step_ad)
+            self.train_step_rms = tf.train.RMSPropOptimizer(self.learning_rate_rms, momentum = 0.5).minimize(self.loss, global_step = global_step_rms)
             self.correct_prediction = tf.equal(tf.argmax(tf.nn.softmax(self.fc3),1), tf.argmax(self.target,1))
-            self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, tf.float32))
+            self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, tf.float32), name = "accuracy")
             _variable_summaries(self.accuracy)
             self.merged = tf.merge_all_summaries()
             self.writer = tf.train.SummaryWriter("./summaries/logs/train", sess.graph)
         else:
-            self.correct_prediction = tf.equal(tf.argmax(tf.nn.softmax(self.cnn_model(self.board, iftrain)),1), tf.argmax(self.target,1))
+            self.correct_prediction = tf.equal(tf.argmax(tf.nn.softmax(self.cnn_modelBN(self.board, iftrain)),1), tf.argmax(self.target,1))
             self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, tf.float32))
         tf.initialize_all_variables().run(session = sess)
         
@@ -68,6 +71,34 @@ class GOCNN(object):
             tf.add_to_collection(collection_name, weight_decay)
         return var
     
+    def batch_norm_wrapper(self, name, bottom, iftrain = True, decay = 0.9):
+        with tf.variable_scope(name):
+            scale = tf.get_variable("scale", shape = [bottom.get_shape()[-1]], dtype = tf.float32, initializer = tf.constant_initializer(1.0))
+            beta = tf.get_variable("beta", shape = [bottom.get_shape()[-1]], dtype = tf.float32, initializer = tf.constant_initializer(0.0))
+            pop_mean = tf.get_variable("pop_mean", shape = [bottom.get_shape()[-1]], dtype = tf.float32, initializer = tf.constant_initializer(0.0), trainable = False)
+            pop_var = tf.get_variable("pop_var", shape = [bottom.get_shape()[-1]], dtype = tf.float32, initializer = tf.constant_initializer(1.0), trainable = False)
+
+            if iftrain:
+                batch_mean, batch_var = tf.nn.moments(bottom, [0, 1, 2])
+                train_mean = tf.assign(pop_mean, pop_mean*decay + batch_mean*(1 - decay))
+                train_var = tf.assign(pop_var, pop_var*decay + batch_var*(1 - decay))
+
+                with tf.control_dependencies([train_mean, train_var]):
+                    return tf.nn.batch_normalization(bottom, batch_mean, batch_var, beta, scale, 1e-3)
+            else:
+                return tf.nn.batch_normalization(bottom, pop_mean, pop_var, beta, scale, 1e-3)
+
+    def conv_2dBN(self, bottom , name, shape, strides, padding, iftrain = True):
+        with tf.variable_scope(name):
+            kernel = tf.get_variable("weights", shape = shape, dtype = tf.float32, 
+                                     initializer = tf.contrib.layers.xavier_initializer_conv2d(uniform=False, dtype=tf.float32))
+            conv = tf.nn.conv2d(bottom, kernel, strides = strides, padding = padding)
+            bn1 = self.batch_norm_wrapper("batch_norm", conv, iftrain)
+            out = tf.nn.relu(bn1)
+            self._add_wd_and_collection(kernel, self.wd)
+            _activation_summary(out)
+            return out
+
     def conv_2d(self, bottom, name, shape, strides, padding):
         with tf.variable_scope(name):
             kernel = tf.get_variable("weights", shape = shape, dtype = tf.float32, 
@@ -143,28 +174,35 @@ class GOCNN(object):
         conv1_1 = self.conv_2d(board, "conv1_1", [7, 7, 3, 64], [1, 1, 1, 1], "SAME")
         conv1_2 = self.conv_2d(conv1_1, "conv1_2", [5, 5, 64, 64], [1, 1, 1, 1], "SAME")
         conv1_3 = self.conv_2d(conv1_2, "conv1_3", [5, 5, 64, 64], [1, 1, 1, 1], "SAME")
-        conv1_4 = self.conv_2d(conv1_3, "conv1_4", [3, 3, 64, 64], [1, 1, 1, 1], "SAME")
-        conv1_5 = self.conv_2d(conv1_4, "conv1_5", [3, 3, 64, 64], [1, 1, 1, 1], "SAME")
+        #conv1_4 = self.conv_2d(conv1_3, "conv1_4", [3, 3, 64, 64], [1, 1, 1, 1], "SAME")
+        #conv1_5 = self.conv_2d(conv1_4, "conv1_5", [3, 3, 64, 64], [1, 1, 1, 1], "SAME")
         #pool1 = tf.nn.max_pool(conv1_3, ksize =[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="VALID", name = "pool1")
 
-        conv1_6 = self.conv_2d(conv1_5, "conv1_6", [3, 3, 64, 128], [1, 1, 1, 1], "SAME")
+        conv1_6 = self.conv_2d(conv1_3, "conv1_6", [3, 3, 64, 128], [1, 1, 1, 1], "SAME")
         
         conv2_1 = self.conv_2d(conv1_6, "conv2_1", [3, 3, 128, 128], [1, 1, 1, 1], "SAME")
         conv2_2 = self.conv_2d(conv2_1, "conv2_2", [3, 3, 128, 192], [1, 1, 1, 1], "SAME")
         conv2_3 = self.conv_2d(conv2_2, "conv2_3", [3, 3, 192, 192], [1, 1, 1, 1], "SAME")
-        #pool2 = tf.nn.max_pool(conv2_3, ksize =[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="VALID", name = "pool2")
-        
-        """
-        conv3_1 = self.conv_2d(pool2, "conv3_1", [3, 3, 256, 512], [1, 1, 1, 1], "SAME")
-        conv3_2 = self.conv_2d(conv3_1, "conv3_2", [3, 3, 512, 512], [1, 1, 1, 1], "SAME")
-        pool3 = tf.nn.max_pool(conv3_2, ksize =[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME", name = "pool3")
-        """
-
-        #shape = pool3.get_shape()
         h_pool3_flat = tf.reshape(conv2_3, [-1, 19*19*192])
         fc1 = self.fc_layer(h_pool3_flat, "fc1", [19*19*192, 1024], iftrain)
         #fc2 = self.fc_layer(tf.nn.relu(fc1), "fc2", [1024, 1024], iftrain)
         self.fc3 = self.fc_layer(tf.nn.relu(fc1), "fc3", [1024, 361], iftrain = False)
+        return self.fc3
+
+    def cnn_modelBN(self, board, iftrain):
+        conv1_1 = self.conv_2dBN(board, "conv1_1", [7, 7, 3, 64], [1, 1, 1, 1], "SAME", iftrain)
+        conv1_2 = self.conv_2dBN(conv1_1, "conv1_2", [5, 5, 64, 64], [1, 1, 1, 1], "SAME", iftrain)
+        conv1_3 = self.conv_2dBN(conv1_2, "conv1_3", [5, 5, 64, 64], [1, 1, 1, 1], "SAME", iftrain)
+        #conv1_4 = self.conv_2dBN(conv1_3, "conv1_4", [3, 3, 64, 64], [1, 1, 1, 1], "SAME", iftrain)
+        #conv1_5 = self.conv_2dBN(conv1_4, "conv1_5", [3, 3, 64, 64], [1, 1, 1, 1], "SAME", iftrain)
+        conv1_6 = self.conv_2dBN(conv1_3, "conv1_6", [3, 3, 64, 128], [1, 1, 1, 1], "SAME", iftrain)        
+        conv2_1 = self.conv_2dBN(conv1_6, "conv2_1", [3, 3, 128, 128], [1, 1, 1, 1], "SAME", iftrain)
+        conv2_2 = self.conv_2dBN(conv2_1, "conv2_2", [3, 3, 128, 192], [1, 1, 1, 1], "SAME", iftrain)
+        conv2_3 = self.conv_2dBN(conv2_2, "conv2_3", [3, 3, 192, 192], [1, 1, 1, 1], "SAME", iftrain)
+        h_pool3_flat = tf.reshape(conv2_3, [-1, 19*19*192])
+        #fc1 = self.fc_layer(h_pool3_flat, "fc1", [19*19*192, 1024], iftrain)
+        #fc2 = self.fc_layer(tf.nn.relu(fc1), "fc2", [1024, 1024], iftrain)
+        self.fc3 = self.fc_layer(h_pool3_flat, "fc3", [19*19*192, 361], iftrain = False)
         return self.fc3
 
 if __name__== '__main__':
@@ -196,16 +234,14 @@ if __name__== '__main__':
         start = time.time()
         accuracy = 0
         for step, (x, y, z) in enumerate(p.batch_iter(train_data, batch_size)):
-            if i > 30:
-                _, loss, lr, acc, summary = sess.run([gocnn.train_step_ad, gocnn.loss, gocnn.learning_rate_ad, gocnn.accuracy,gocnn.merged ], 
+            #if i < 10:
+            _, loss, lr, acc = sess.run([gocnn.train_step_rms, gocnn.loss, gocnn.learning_rate_rms, gocnn.accuracy], 
                                                      feed_dict = {gocnn.board:x, gocnn.target:y})
-            else:
-                _, loss, lr, acc, summary = sess.run([gocnn.train_step_gd, gocnn.loss, gocnn.learning_rate_gd, gocnn.accuracy,gocnn.merged], 
-                                                     feed_dict = {gocnn.board:x, gocnn.target:y})
-            if step%100 ==0:
-                gocnn.writer.add_summary(summary, i*10000/batch_size + step)
+            #else:
+               # _, loss, lr, acc = sess.run([gocnn.train_step_gd, gocnn.loss, gocnn.learning_rate_gd, gocnn.accuracy], 
+               #                                     feed_dict = {gocnn.board:x, gocnn.target:y})
             accuracy+=acc
-            if step%int(math.ceil(len(train_data)/batch_size/10.0))==0:
+            if step%10==0:
                 print "step:{}\taccuracy:{:3.3f}\tloss:{:3.5f}\t".format(step,accuracy/(step+1), loss)
 
         accuracy = 0
@@ -216,7 +252,6 @@ if __name__== '__main__':
                 feed_dict = {gocnn_test.board:x, gocnn_test.target:y})
             accuracy+=acc
         print "step:{}\taccuracy:{:3.3f}".format(step, accuracy/(step+1))
-        f.write("V:{:0.5f}\n".format(accuracy/(step+1)))
         if (i+1)%10 == 0:
             path = saver.save(sess, checkpoint_prefix, global_step=i)
             print("Saved model checkpoint to {}\n".format(path))
